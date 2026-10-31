@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - MOCK_LLM=true
+      - AUTO_ACTION_LIMIT=5000.00
+      - DATABASE_URL=sqlite:////app/saarthi.db
+      - PAYMENTS_API_KEY=saarthi-mock-bank-key-secret-2026
+    volumes:
+      - saarthi-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  saarthi-data:
+
