@@ -1,14 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Send, Shield, CheckCircle2, Clock, AlertTriangle, ArrowRight, Sparkles, RefreshCw, Lock } from 'lucide-react';
 import { sendChatMessage } from '../api';
 
 const QUICK_PRESETS = [
-  { label: "Scenario A: ₹2,000 Failed (Zomato)", prompt: "₹2,000 debited for my Zomato order TXN-1001, but the app says payment failed. Please refund my money.", customerId: "CUST-4921" },
-  { label: "Scenario B: ₹2,000 Pending (Swiggy)", prompt: "I paid ₹2,000 on Swiggy TXN-1002, money left my bank account but Swiggy says waiting for bank confirmation.", customerId: "CUST-8832" },
-  { label: "Scenario E: ₹12,000 Approval (Croma)", prompt: "Payment of ₹12,000 for my Croma purchase TXN-1005 failed. Money got cut from my account.", customerId: "CUST-5541" },
-  { label: "Scenario F: Verification Mismatch (Uber)", prompt: "My Uber ride TXN-1006 for ₹1,800 failed at payment gateway. Please reverse.", customerId: "CUST-6120" },
-  { label: "Scenario H: Hinglish Query (Blinkit)", prompt: "Mera 1500 cut gaya Blinkit TXN-1008 par merchant bola payment fail ho gaya. Paise wapas chahiye.", customerId: "CUST-1190" },
-  { label: "Scenario I: General FAQ", prompt: "What does a debit mean? Why do payments fail sometimes?", customerId: "CUST-4921" },
+  { label: "A: ₹2,000 Failed (Zomato)", prompt: "₹2,000 debited for my Zomato order TXN-1001, but the app says payment failed. Please refund my money.", customerId: "CUST-4921" },
+  { label: "B: ₹2,000 Pending (Swiggy)", prompt: "I paid ₹2,000 on Swiggy TXN-1002, money left my bank account but Swiggy says waiting for bank confirmation.", customerId: "CUST-8832" },
+  { label: "C: Duplicate Debit (Amazon)", prompt: "I was charged ₹650 twice for the same Amazon order TXN-1003B! Reverse the extra debit.", customerId: "CUST-3319" },
+  { label: "D: Risk-Flagged (CryptoPay)", prompt: "Why was my payment TXN-1004 of ₹3,500 on CryptoPay declined? Refund immediately.", customerId: "CUST-9011" },
+  { label: "E: ₹12,000 Approval (Croma)", prompt: "Payment of ₹12,000 for my Croma purchase TXN-1005 failed. Money got cut from my account.", customerId: "CUST-5541" },
+  { label: "F: Verification Mismatch (Uber)", prompt: "My Uber ride TXN-1006 for ₹1,800 failed at payment gateway. Please reverse.", customerId: "CUST-6120" },
+  { label: "G: Repeat / Idempotency (Flipkart)", prompt: "₹2,000 cut on Flipkart TXN-1007 but payment failed. Please reverse it.", customerId: "CUST-7744" },
+  { label: "H: Hinglish Query (Blinkit)", prompt: "Mera 1500 cut gaya Blinkit TXN-1008 par merchant bola payment fail ho gaya. Paise wapas chahiye.", customerId: "CUST-1190" },
+  { label: "I: General FAQ", prompt: "What does a debit mean? Why do payments fail sometimes?", customerId: "CUST-4921" },
 ];
 
 const WORKFLOW_STAGES = [
@@ -21,7 +24,7 @@ const WORKFLOW_STAGES = [
   { id: "INFORM", label: "Inform" },
 ];
 
-export default function CustomerChat({ onCaseCreated, onSelectTraceCase }) {
+export default function CustomerChat({ onCaseCreated, onSelectTraceCase, scenarioToRun, onScenarioConsumed }) {
   const [messages, setMessages] = useState([
     {
       sender: "saarthi",
@@ -99,6 +102,17 @@ export default function CustomerChat({ onCaseCreated, onSelectTraceCase }) {
       setIsInvestigating(false);
     }
   };
+
+  const lastScenarioKey = useRef(null);
+  useEffect(() => {
+    if (scenarioToRun && scenarioToRun.key !== lastScenarioKey.current && !isInvestigating) {
+      lastScenarioKey.current = scenarioToRun.key;
+      setCurrentCustomerId(scenarioToRun.customerId);
+      handleSend(scenarioToRun.prompt, scenarioToRun.customerId);
+      if (onScenarioConsumed) onScenarioConsumed();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scenarioToRun]);
 
   const renderStatusBadge = (chip) => {
     if (!chip) return null;

@@ -11,6 +11,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('chat');
   const [selectedCaseId, setSelectedCaseId] = useState(null);
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
+  const [scenarioToRun, setScenarioToRun] = useState(null);
 
   const checkPendingApprovals = async () => {
     try {
@@ -38,8 +39,13 @@ export default function App() {
   };
 
   const handleSelectScenario = (scenario) => {
+    // Hand the selected scenario to Customer Chat and auto-run its complaint.
+    setScenarioToRun({
+      prompt: scenario.sample_prompt,
+      customerId: scenario.customer_id,
+      key: `${scenario.scenario_id}-${Date.now()}`
+    });
     setActiveTab('chat');
-    // Set a custom event or let user run from chat quick pill
   };
 
   return (
@@ -55,6 +61,8 @@ export default function App() {
           <CustomerChat
             onCaseCreated={handleCaseCreated}
             onSelectTraceCase={handleSelectTraceCase}
+            scenarioToRun={scenarioToRun}
+            onScenarioConsumed={() => setScenarioToRun(null)}
           />
         )}
 
