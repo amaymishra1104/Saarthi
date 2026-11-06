@@ -19,9 +19,13 @@ class Settings(BaseSettings):
     AUTO_ACTION_LIMIT: float = float(os.getenv("AUTO_ACTION_LIMIT", "5000.00"))
     
     # LLM Configuration
+    # MOCK_LLM=true keeps the deterministic offline engine (default, no key needed).
+    # Set MOCK_LLM=false and provide an LLM key to enable a real model.
+    # Priority: EMERGENT_LLM_KEY (universal key, any provider/model) -> GEMINI_API_KEY (legacy path).
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "gemini")
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "gemini-1.5-flash")
+    EMERGENT_LLM_KEY: str = os.getenv("EMERGENT_LLM_KEY", "")
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "openai")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-5.4")
     MOCK_LLM: bool = os.getenv("MOCK_LLM", "true").lower() in ("true", "1", "yes")
     
     # Policy RAG

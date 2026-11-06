@@ -211,10 +211,9 @@ cd frontend && npm run dev
 Seed data auto-loads on startup. On Windows use `powershell -ExecutionPolicy Bypass -File ./run_saarthi.ps1` or `make dev`.
 
 ### 🔜 Next Steps (prioritized)
-1. **P0 — Live LLM via Emergent universal key:** wire an optional provider in `backend/agent/llm.py` (keeps `MOCK_LLM=true` as the default and for tests).
-2. **P1 — Supervisor customer replies surfaced in Chat UI** (currently written to case steps via `POST /api/cases/{id}/reply` but not shown in the chat thread).
-3. **P1 — Demo walkthrough:** update `backend/scripts/walkthrough.py` selectors to the current UI labels and re-capture screenshots.
-4. **P2 — Production hardening:** swap SQLite → PostgreSQL via `DATABASE_URL`, add pytest coverage for the `/api/chat` HTTP layer, add CI (GitHub Actions) to run the suite on push.
+1. **P1 — Supervisor customer replies surfaced in Chat UI** (currently written to case steps via `POST /api/cases/{id}/reply` but not shown in the chat thread).
+2. **P1 — Demo walkthrough:** update `backend/scripts/walkthrough.py` selectors to the current UI labels and re-capture screenshots.
+3. **P2 — Production hardening:** swap SQLite → PostgreSQL via `DATABASE_URL`, add pytest coverage for the `/api/chat` HTTP layer, add CI (GitHub Actions) to run the suite on push.
 
 ---
 
@@ -224,7 +223,7 @@ Seed data auto-loads on startup. On Windows use `powershell -ExecutionPolicy Byp
 > **What Works vs. What is Simulated**
 
 1. **Simulated Payments Core:** The banking switch (`/payments-core`) and its 30 seeded accounts, merchants, and failure modes are an authentic simulation modeled after NPCI UPI / IMPS switch specifications. It is not connected to a live banking license.
-2. **Deterministic Fallback (`MOCK_LLM=true`):** To ensure 100% test reliability and offline execution without requiring third-party API keys or incurring token costs, the prototype includes a fully functional rule-based mock LLM. Providing `GEMINI_API_KEY` activates the live Gemini API.
+2. **Deterministic Fallback (`MOCK_LLM=true`, default):** To ensure 100% test reliability and offline execution without requiring third-party API keys or incurring token costs, the prototype includes a fully functional rule-based mock LLM. To use a **real LLM**, set `MOCK_LLM=false` and provide `EMERGENT_LLM_KEY` (universal key, works with any provider/model — default `openai/gpt-5.4`) or `GEMINI_API_KEY` (legacy direct path). On any API failure it gracefully falls back to the deterministic engine.
 3. **Prototype Run Data Only:** The Metrics Dashboard queries local SQLite database counts of disputes run in the active session. It does NOT make fabricated claims about real-world resolution statistics.
 4. **Local Database:** Defaults to SQLite with full SQLAlchemy ORM mappings ready for PostgreSQL via `DATABASE_URL`.
 

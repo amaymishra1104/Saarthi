@@ -26,16 +26,21 @@ class LLMWrapper:
     """
     def __init__(self):
         self.provider = settings.LLM_PROVIDER
-        self.mock_mode = settings.MOCK_LLM or not bool(settings.GEMINI_API_KEY)
+        self.model = settings.LLM_MODEL
+        # Real LLM requires MOCK_LLM=false AND a usable key.
+        self.emergent_key = settings.EMERGENT_LLM_KEY
+        self.gemini_key = settings.GEMINI_API_KEY
+        has_key = bool(self.emergent_key) or bool(self.gemini_key)
+        self.mock_mode = settings.MOCK_LLM or not has_key
         self._gemini_client = None
 
-        if not self.mock_mode and settings.GEMINI_API_KEY:
+        if not self.mock_mode and self.gemini_key and not self.emergent_key:
+            # Legacy direct-Gemini path (only when no universal key present)
             try:
                 import google.generativeai as genai
-                genai.configure(api_key=settings.GEMINI_API_KEY)
-                self._gemini_client = genai.GenerativeModel(settings.LLM_MODEL)
-            except Exception as e:
-                # Fall back to mock mode if Gemini init fails
+                genai.configure(api_key=self.gemini_key)
+                self._gemini_client = genai.GenerativeModel(self.model)
+            except Exception:
                 self.mock_mode = True
 
     def detect_language(self, text: str) -> str:
@@ -58,11 +63,16 @@ class LLMWrapper:
         safe_text = OutputGuard.sanitize_context_for_llm(text)
         lang = self.detect_language(safe_text)
 
-        if not self.mock_mode and self._gemini_client:
+        if not self.mock_mode and self.emergent_key:
+            try:
+                return await self._call_emergent_understand(safe_text, customer_id, lang)
+            except Exception:
+                # Graceful fallback to deterministic mock engine on API hiccup
+                pass
+        elif not self.mock_mode and self._gemini_client:
             try:
                 return await self._call_gemini_understand(safe_text, customer_id, lang)
             except Exception:
-                # Graceful fallback to deterministic mock engine on API hiccup
                 pass
 
         return self._mock_understand(safe_text, customer_id, lang)
@@ -146,6 +156,48 @@ class LLMWrapper:
             proposed_arguments={"txn_id": txn_id, "customer_id": customer_id, "amount": amount},
             reasoning=f"Identified payment complaint in language '{lang}'. Proposing lookup_transaction to inspect core transaction state."
         )
+
+    async def _call_emergent_understand(self, text: str, customer_id: str, lang: str) -> LLMProposal:
+        """Real LLM path via the Emergent universal key (any provider/model)."""
+        from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
+
+        system_prompt = (
+            "You are the intelligence component of SAARTHI, an autonomous payment dispute resolver. "
+            "Analyze the customer's complaint and reply STRICTLY as a single JSON object (no markdown) with fields: "
+            "intent (PAYMENT_COMPLAINT or GENERAL_FAQ), language (en, hi, hinglish), is_faq (bool), "
+            "faq_response (str or null), extracted_txn_id (str like 'TXN-1001' or null), extracted_amount (float or null), "
+            "extracted_merchant (str or null), reasoning (short str)."
+        )
+        chat = LlmChat(
+            api_key=self.emergent_key,
+            session_id=f"saarthi-{customer_id}",
+            system_message=system_prompt,
+        ).with_model(self.provider, self.model)
+
+        raw = ""
+        async for ev in chat.stream_message(UserMessage(text=text)):
+            if isinstance(ev, TextDelta):
+                raw += ev.content
+            elif isinstance(ev, StreamDone):
+                break
+
+        clean_json = re.search(r'\{[\s\S]*\}', raw)
+        if clean_json:
+            data = json.loads(clean_json.group(0))
+            return LLMProposal(
+                intent=data.get("intent", "PAYMENT_COMPLAINT"),
+                language=data.get("language", lang),
+                is_faq=data.get("is_faq", False),
+                faq_response=data.get("faq_response"),
+                extracted_txn_id=data.get("extracted_txn_id"),
+                extracted_amount=data.get("extracted_amount"),
+                extracted_merchant=data.get("extracted_merchant"),
+                proposed_tool="lookup_transaction",
+                proposed_arguments={"txn_id": data.get("extracted_txn_id"), "customer_id": customer_id},
+                reasoning=data.get("reasoning", f"Parsed via {self.provider}/{self.model}.")
+            )
+        # Unparseable output -> fall back to deterministic parser
+        return self._mock_understand(text, customer_id, lang)
 
     def _call_gemini_understand(self, text: str, customer_id: str, lang: str) -> LLMProposal:
         # Prompt structured instructions to Gemini
