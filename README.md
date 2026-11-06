@@ -187,7 +187,38 @@ backend/tests/test_scenarios.py::test_scenario_i_faq_no_case_created PASSED
 
 ---
 
-## 7. Honest Limitations & Scope
+## 7. Current Status & Next Steps
+
+### ✅ What works (verified)
+- **Backend:** FastAPI app runs; `pytest -v` → **27/27 pass** in `MOCK_LLM=true` mode (Permission Gate, idempotency, OTP/PIN guard, all 6 failure-matrix rows, scenarios A–I).
+- **Mock Payments Core:** 30 seeded transactions, authoritative status check, reversal with Idempotency-Key, chaos switches (lookup fail / timeout / ambiguous / verification mismatch).
+- **Agent loop:** 9 approved tools, deterministic Permission Gate (ALLOW / REQUIRE_APPROVAL / DENY), explicit state machine, Policy RAG with citations, immutable audit log, PII masking + output guard.
+- **Frontend:** Customer Chat (live step indicator + status chips), Agent Trace, Human Console, Admin/Demo panel (chaos toggles + reset), honest Metrics. Admin "Run Scenario" now auto-runs in Chat; all scenarios A–I are demoable.
+- **Git:** Committed and pushed to `main`. Latest commit: `f7515bd`.
+
+### ▶️ How to run (Linux/macOS)
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r backend/requirements.txt
+cd frontend && npm install && cd ..
+
+# Terminal 1 — backend (http://localhost:8000, docs at /docs)
+MOCK_LLM=true uvicorn backend.main:app --reload --port 8000
+
+# Terminal 2 — frontend (http://localhost:5173)
+cd frontend && npm run dev
+```
+Seed data auto-loads on startup. On Windows use `powershell -ExecutionPolicy Bypass -File ./run_saarthi.ps1` or `make dev`.
+
+### 🔜 Next Steps (prioritized)
+1. **P0 — Live LLM via Emergent universal key:** wire an optional provider in `backend/agent/llm.py` (keeps `MOCK_LLM=true` as the default and for tests).
+2. **P1 — Supervisor customer replies surfaced in Chat UI** (currently written to case steps via `POST /api/cases/{id}/reply` but not shown in the chat thread).
+3. **P1 — Demo walkthrough:** update `backend/scripts/walkthrough.py` selectors to the current UI labels and re-capture screenshots.
+4. **P2 — Production hardening:** swap SQLite → PostgreSQL via `DATABASE_URL`, add pytest coverage for the `/api/chat` HTTP layer, add CI (GitHub Actions) to run the suite on push.
+
+---
+
+## 8. Honest Limitations & Scope
 
 > [!IMPORTANT]
 > **What Works vs. What is Simulated**
