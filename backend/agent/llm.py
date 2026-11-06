@@ -78,9 +78,43 @@ class LLMWrapper:
         return self._mock_understand(safe_text, customer_id, lang)
 
     def _mock_understand(self, text: str, customer_id: str, lang: str) -> LLMProposal:
-        lower = text.lower()
+        lower = text.lower().strip()
 
-        # 1. Check for General FAQ (Scenario I: "what does a debit mean?")
+        # 1. Check for Greetings
+        greetings = {"hi", "hello", "hey", "greetings", "good morning", "good afternoon", "good evening", "namaste", "pranam", "sup"}
+        words = lower.split()
+        if lower in greetings or (len(words) <= 3 and words[0] in greetings and not any(w in lower for w in ["fail", "debit", "cut", "money", "order", "txn"])):
+            return LLMProposal(
+                intent="GREETING",
+                language=lang,
+                is_faq=True,
+                faq_response="Hello! I am Saarthi, your autonomous payments resolution teammate. If your account was debited for a failed or pending payment, or if you faced a duplicate charge, please let me know the details (such as the amount, merchant, or Transaction ID) and I will investigate and resolve it.",
+                reasoning="User sent a greeting. Responded with introduction and instructions."
+            )
+
+        # 2. Check for Out-of-Scope Requests (food ordering, ride hailing, shopping, etc.)
+        out_of_scope_food = ["order food", "wanna order", "want to order", "order pizza", "order burger", "order biryani", "food delivery", "buy food", "hungry", "menu", "get food", "can i order"]
+        out_of_scope_rides = ["book cab", "book taxi", "book uber", "book ride", "book ola"]
+        
+        if any(p in lower for p in out_of_scope_food):
+            return LLMProposal(
+                intent="OUT_OF_SCOPE",
+                language=lang,
+                is_faq=True,
+                faq_response="I am Saarthi, an autonomous AI teammate specialized in resolving payment complaints and transaction disputes. I do not place food orders or order from merchants. However, if your account was debited for an order that failed, please describe what happened (including the amount or Transaction ID), and I will investigate and resolve the payment dispute.",
+                reasoning="User attempted to place a food order. Clarified scope to payment dispute resolution."
+            )
+
+        if any(p in lower for p in out_of_scope_rides):
+            return LLMProposal(
+                intent="OUT_OF_SCOPE",
+                language=lang,
+                is_faq=True,
+                faq_response="I am Saarthi, an autonomous AI teammate specialized in resolving payment disputes. I do not book rides or manage travel reservations. If you experienced a payment failure or double debit on a ride, please provide the transaction details and I will resolve it.",
+                reasoning="User attempted to book a ride. Clarified scope to payment dispute resolution."
+            )
+
+        # 3. Check for General FAQ (Scenario I: "what does a debit mean?")
         faq_patterns = [
             ("what does a debit mean", "A debit means funds have been deducted from your bank account by your issuing bank. In failed payments, debited funds are either settled or automatically reversed back by the clearing network."),
             ("what is a debit freeze", "A debit freeze is a temporary security hold placed by a bank that prevents outgoing transactions while allowing incoming deposits."),
@@ -101,24 +135,23 @@ class LLMWrapper:
                     reasoning="Query identified as general informational FAQ. No financial case creation required."
                 )
 
-        # 2. Extract Txn ID if explicitly provided (e.g., TXN-1001)
+        # 4. Extract Txn ID if explicitly provided (e.g., TXN-1001)
         txn_match = re.search(r'\b(TXN-\d{4}[A-Z]?)\b', text, re.IGNORECASE)
         txn_id = txn_match.group(1).upper() if txn_match else None
 
-        # 3. Extract Amount (e.g. ₹2,000, 2000, Rs 1500)
+        # 5. Extract Amount (e.g. ₹2,000, 2000, Rs 1500)
         amt_match = re.search(r'(?:₹|rs\.?|inr)?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?|[0-9]+)\s*(?:rs|rupees|rupaye)?', text, re.IGNORECASE)
         amount = None
         if amt_match:
             try:
                 raw_amt = amt_match.group(1).replace(",", "")
                 val = float(raw_amt)
-                # Ensure plausible transaction amount
                 if val >= 10:
                     amount = val
             except ValueError:
                 pass
 
-        # 4. Extract Merchant
+        # 6. Extract Merchant
         merchants = ["zomato", "swiggy", "amazon", "cryptopay", "croma", "uber", "flipkart", "blinkit", "myntra", "ola"]
         found_merchant = None
         for m in merchants:
@@ -144,6 +177,24 @@ class LLMWrapper:
                 txn_id = "TXN-1002"
             elif "zomato" in lower or "2000" in lower or "2,000" in lower:
                 txn_id = "TXN-1001"
+
+        # 7. Check if user expressed genuine payment dispute intent
+        dispute_keywords = [
+            "debit", "debited", "deduct", "deducted", "cut", "kat gaya", "kat gaye",
+            "fail", "failed", "failure", "refund", "reversal", "charge", "charged",
+            "twice", "double", "duplicate", "pending", "declined", "dispute", "paisa", "paise",
+            "rupaye", "money", "paid", "payment", "stuck", "wapas", "not received"
+        ]
+        has_dispute_context = txn_id is not None or any(k in lower for k in dispute_keywords)
+
+        if not has_dispute_context:
+            return LLMProposal(
+                intent="GENERAL_INQUIRY",
+                language=lang,
+                is_faq=True,
+                faq_response="I am Saarthi, an autonomous AI teammate specialized in resolving payment complaints and transaction disputes. I couldn't identify a payment dispute in your message. If your bank account was debited for a failed or pending payment, please describe what happened (or provide the transaction ID / amount) and I will verify it directly with the banking switch.",
+                reasoning="User message does not express a payment dispute. Prompted user for dispute details."
+            )
 
         return LLMProposal(
             intent="PAYMENT_COMPLAINT",
@@ -204,25 +255,28 @@ class LLMWrapper:
         system_prompt = (
             "You are the intelligence component of SAARTHI, an autonomous payment dispute resolver. "
             "Analyze the customer's input and reply strictly in valid JSON with fields: "
-            "intent (PAYMENT_COMPLAINT or GENERAL_FAQ), language (en, hi, hinglish), is_faq (bool), "
-            "faq_response (str or null), extracted_txn_id (str or null), extracted_amount (float or null), "
-            "extracted_merchant (str or null), proposed_tool (must be 'lookup_transaction' or null), "
+            "intent (PAYMENT_COMPLAINT, GENERAL_FAQ, OUT_OF_SCOPE, or GREETING), language (en, hi, hinglish), "
+            "is_faq (bool - set true for GENERAL_FAQ, OUT_OF_SCOPE, GREETING, or non-payment inquiries), "
+            "faq_response (str or null - provide helpful explanation if is_faq is true, e.g. explaining Saarthi resolves payment debits, not food orders), "
+            "extracted_txn_id (str or null), extracted_amount (float or null), "
+            "extracted_merchant (str or null), proposed_tool (must be 'lookup_transaction' if PAYMENT_COMPLAINT else null), "
             "reasoning (str)."
         )
         response = self._gemini_client.generate_content(f"{system_prompt}\nCustomer: {text}")
         clean_json = re.search(r'\{[\s\S]*\}', response.text)
         if clean_json:
             data = json.loads(clean_json.group(0))
+            is_faq_val = data.get("is_faq", False) or data.get("intent") in ("GENERAL_FAQ", "OUT_OF_SCOPE", "GREETING")
             return LLMProposal(
                 intent=data.get("intent", "PAYMENT_COMPLAINT"),
                 language=data.get("language", lang),
-                is_faq=data.get("is_faq", False),
+                is_faq=is_faq_val,
                 faq_response=data.get("faq_response"),
                 extracted_txn_id=data.get("extracted_txn_id"),
                 extracted_amount=data.get("extracted_amount"),
                 extracted_merchant=data.get("extracted_merchant"),
-                proposed_tool=data.get("proposed_tool", "lookup_transaction"),
-                proposed_arguments={"txn_id": data.get("extracted_txn_id"), "customer_id": customer_id},
+                proposed_tool=data.get("proposed_tool") if not is_faq_val else None,
+                proposed_arguments={"txn_id": data.get("extracted_txn_id"), "customer_id": customer_id} if not is_faq_val else {},
                 reasoning=data.get("reasoning", "Parsed via Gemini model.")
             )
         return self._mock_understand(text, customer_id, lang)

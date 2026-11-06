@@ -157,3 +157,29 @@ async def test_scenario_i_faq_no_case_created(db_session):
     assert res.is_faq is True
     assert res.case_id is None
     assert "A debit means funds have been deducted" in res.customer_message
+
+@pytest.mark.asyncio
+async def test_out_of_scope_food_ordering(db_session):
+    """Out of scope: user says 'I WANNA ORDER FOOD' -> clarified scope, no case created, no false reversal."""
+    orchestrator = SaarthiOrchestrator(db_session)
+    res = await orchestrator.run(
+        "I WANNA ORDER FOOD",
+        customer_id="CUST-4921"
+    )
+    assert res.is_faq is True
+    assert res.case_id is None
+    assert res.status_chip is None
+    assert "do not place food orders" in res.customer_message.lower() or "not take food orders" in res.customer_message.lower()
+
+@pytest.mark.asyncio
+async def test_greeting_intent(db_session):
+    """Greeting: user says 'Hello' -> responds with introduction, no case created."""
+    orchestrator = SaarthiOrchestrator(db_session)
+    res = await orchestrator.run(
+        "Hello",
+        customer_id="CUST-4921"
+    )
+    assert res.is_faq is True
+    assert res.case_id is None
+    assert res.status_chip is None
+    assert "hello! i am saarthi" in res.customer_message.lower()

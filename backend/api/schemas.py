@@ -13,11 +13,11 @@ class StepTrace(BaseModel):
     timestamp: str
 
 class ChatResponse(BaseModel):
-    case_id: Optional[str]
+    case_id: Optional[str] = None
     status: str
-    outcome: Optional[str]
+    outcome: Optional[str] = None
     customer_message: str
-    status_chip: str
+    status_chip: Optional[str] = None
     steps: List[Dict[str, Any]]
     case_brief: Optional[Dict[str, Any]] = None
     is_faq: bool = False

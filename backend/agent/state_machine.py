@@ -119,7 +119,7 @@ class SaarthiOrchestrator:
         )
         checks_performed.append("Customer intent parsed and language identified")
 
-        # Scenario I: General informational FAQ (No financial case creation)
+        # Scenario I: General informational FAQ, Greeting, or Out of Scope
         if proposal.is_faq and proposal.faq_response:
             is_safe, safe_faq = OutputGuard.sanitize_and_validate(proposal.faq_response)
             self._record_step(
@@ -133,7 +133,7 @@ class SaarthiOrchestrator:
                 status="CLOSED",
                 outcome="FAQ_ANSWERED",
                 customer_message=safe_faq,
-                status_chip="RESOLVED_VERIFIED",
+                status_chip=None,
                 steps=self.recorded_steps,
                 is_faq=True
             )
@@ -201,7 +201,19 @@ class SaarthiOrchestrator:
             )
 
         # Handle single vs list data from lookup
-        txn_data = lookup_res.data if isinstance(lookup_res.data, dict) else lookup_res.data[0]
+        if isinstance(lookup_res.data, list) and lookup_res.data:
+            if proposal.extracted_txn_id:
+                matched = [t for t in lookup_res.data if t.get("txn_id") == proposal.extracted_txn_id]
+                txn_data = matched[0] if matched else lookup_res.data[0]
+            elif proposal.extracted_merchant:
+                matched = [t for t in lookup_res.data if proposal.extracted_merchant.lower() in t.get("merchant", "").lower()]
+                txn_data = matched[0] if matched else lookup_res.data[0]
+            else:
+                # Prioritize active dispute states (FAILED, PENDING_CONFIRMATION, DUPLICATE_DEBIT) over already REVERSED or SUCCESS
+                dispute_txns = [t for t in lookup_res.data if t.get("status") in ("FAILED", "PENDING_CONFIRMATION", "DUPLICATE_DEBIT")]
+                txn_data = dispute_txns[0] if dispute_txns else lookup_res.data[0]
+        else:
+            txn_data = lookup_res.data
         txn_id = txn_data.get("txn_id")
         case_record.txn_id = txn_id
         self.db.commit()
