@@ -1,16 +1,28 @@
-# React + Vite
+# SAARTHI Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React 18 + Vite + Tailwind CSS UI for SAARTHI, the autonomous payment-dispute resolution teammate.
 
-Currently, two official plugins are available:
+## What this app shows
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| Tab | Purpose |
+| :--- | :--- |
+| **Customer Chat** | Live step indicator (Understand → Investigate → Decide → Gate → Act → Verify → Inform) and a final status chip: `Resolved (Verified)`, `Awaiting Status Change`, or `Escalated`. Includes demo quick-starter pills for Scenarios A–I. |
+| **Agent Trace** | Tool calls, policy citations, Permission-Gate decision, verification result, and the immutable audit log for the selected case. |
+| **Human Console** | Escalation / approval queue with the structured Case Brief, Approve/Reject, and a reply-to-customer box. |
+| **Admin / Scenarios** | Run the 9 benchmark scenarios and toggle upstream chaos modes (lookup fail, timeout, ambiguous status, verification mismatch), plus reset seed data. |
+| **Metrics** | Honest prototype run data only, computed from the local database (no fake stats). |
 
-## React Compiler
+## Run
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+npm install
+npm run dev      # http://localhost:5173 (expects backend on http://localhost:8000)
+```
 
-## Expanding the Oxlint configuration
+Build for production:
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+```bash
+npm run build    # outputs to dist/
+```
+
+The backend base URL is set in `src/api.js` (`http://localhost:8000/api` by default).
